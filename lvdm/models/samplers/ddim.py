@@ -278,8 +278,6 @@ class DDIMSampler(object):
 
         img_out = torch.cat(img_out,dim=2)
 
-        print('img_out:',img_out.max())
-
         return img_out, intermediates    
 
 

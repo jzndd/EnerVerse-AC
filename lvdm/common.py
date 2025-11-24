@@ -1,24 +1,45 @@
+# Copyright 2025 The RLinf Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import math
 from inspect import isfunction
+
 import torch
-from torch import nn
 import torch.distributed as dist
+from torch import nn
 
 
 def gather_data(data, return_np=True):
-    ''' gather data from multiple processes to one list '''
+    """gather data from multiple processes to one list"""
     data_list = [torch.zeros_like(data) for _ in range(dist.get_world_size())]
     dist.all_gather(data_list, data)  # gather not supported with NCCL
     if return_np:
         data_list = [data.cpu().numpy() for data in data_list]
     return data_list
 
+
 def autocast(f):
     def do_autocast(*args, **kwargs):
-        with torch.cuda.amp.autocast(enabled=True,
-                                     dtype=torch.get_autocast_gpu_dtype(),
-                                     cache_enabled=torch.is_autocast_cache_enabled()):
+        with torch.amp.autocast(
+            enabled=True,
+            device_type="cuda",
+            dtype=torch.get_autocast_gpu_dtype(),
+            cache_enabled=torch.is_autocast_cache_enabled(),
+        ):
             return f(*args, **kwargs)
+
     return do_autocast
 
 
@@ -29,8 +50,14 @@ def extract_into_tensor(a, t, x_shape):
 
 
 def noise_like(shape, device, repeat=False):
-    repeat_noise = lambda: torch.randn((1, *shape[1:]), device=device).repeat(shape[0], *((1,) * (len(shape) - 1)))
-    noise = lambda: torch.randn(shape, device=device)
+    def repeat_noise():
+        return torch.randn((1, *shape[1:]), device=device).repeat(
+            shape[0], *((1,) * (len(shape) - 1))
+        )
+
+    def noise():
+        return torch.randn(shape, device=device)
+
     return repeat_noise() if repeat else noise()
 
 
@@ -39,14 +66,18 @@ def default(val, d):
         return val
     return d() if isfunction(d) else d
 
+
 def exists(val):
     return val is not None
+
 
 def identity(*args, **kwargs):
     return nn.Identity()
 
+
 def uniq(arr):
-    return{el: True for el in arr}.keys()
+    return dict.fromkeys(arr, True).keys()
+
 
 def mean_flat(tensor):
     """
@@ -54,22 +85,27 @@ def mean_flat(tensor):
     """
     return tensor.mean(dim=list(range(1, len(tensor.shape))))
 
+
 def ismap(x):
     if not isinstance(x, torch.Tensor):
         return False
     return (len(x.shape) == 4) and (x.shape[1] > 3)
 
+
 def isimage(x):
-    if not isinstance(x,torch.Tensor):
+    if not isinstance(x, torch.Tensor):
         return False
     return (len(x.shape) == 4) and (x.shape[1] == 3 or x.shape[1] == 1)
+
 
 def max_neg_value(t):
     return -torch.finfo(t.dtype).max
 
+
 def shape_to_str(x):
     shape_str = "x".join([str(x) for x in x.shape])
     return shape_str
+
 
 def init_(tensor):
     dim = tensor.shape[-1]
@@ -77,7 +113,10 @@ def init_(tensor):
     tensor.uniform_(-std, std)
     return tensor
 
+
 ckpt = torch.utils.checkpoint.checkpoint
+
+
 def checkpoint(func, inputs, params, flag):
     """
     Evaluate a function without caching intermediate activations, allowing for

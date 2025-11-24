@@ -8,13 +8,17 @@
 # thanks!
 
 import torch.nn as nn
-from utils.general_utils import instantiate_from_config
+
+from utils.general_utils import (
+    instantiate_from_config,
+)
 
 
 def disabled_train(self, mode=True):
     """Overwrite model.train with this function to make sure train/eval mode
     does not change anymore."""
     return self
+
 
 def zero_module(module):
     """
@@ -23,6 +27,7 @@ def zero_module(module):
     for p in module.parameters():
         p.detach().zero_()
     return module
+
 
 def scale_module(module, scale):
     """
@@ -66,11 +71,14 @@ def avg_pool_nd(dims, *args, **kwargs):
     raise ValueError(f"unsupported dimensions: {dims}")
 
 
-def nonlinearity(type='silu'):
-    if type == 'silu':
+def nonlinearity(type="silu"):
+    if type == "silu":
         return nn.SiLU()
-    elif type == 'leaky_relu':
+    elif type == "leaky_relu":
         return nn.LeakyReLU()
+    else:
+        raise ValueError(f"Invalid nonlinearity type: {type}")
+        return None  # type: ignore[unreachable]
 
 
 class GroupNormSpecific(nn.GroupNorm):
@@ -88,7 +96,6 @@ def normalization(channels, num_groups=32):
 
 
 class HybridConditioner(nn.Module):
-
     def __init__(self, c_concat_config, c_crossattn_config):
         super().__init__()
         self.concat_conditioner = instantiate_from_config(c_concat_config)
@@ -97,4 +104,4 @@ class HybridConditioner(nn.Module):
     def forward(self, c_concat, c_crossattn):
         c_concat = self.concat_conditioner(c_concat)
         c_crossattn = self.crossattn_conditioner(c_crossattn)
-        return {'c_concat': [c_concat], 'c_crossattn': [c_crossattn]}
+        return {"c_concat": [c_concat], "c_crossattn": [c_crossattn]}

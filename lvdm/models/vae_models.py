@@ -1,14 +1,13 @@
 import logging
 import math
+from inspect import isfunction
 from typing import Any, Callable, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
-from inspect import isfunction
 from einops import rearrange, repeat
 from packaging import version
-from typing import Tuple
 from torch import Tensor
 
 logpy = logging.getLogger(__name__)
@@ -18,19 +17,20 @@ try:
     import xformers.ops
 
     XFORMERS_IS_AVAILABLE = True
-except:
+except ImportError:
     XFORMERS_IS_AVAILABLE = False
     logpy.warning("no module 'xformers'. Processing without...")
-
 
 
 def exists(val):
     return val is not None
 
+
 def default(val, d):
     if exists(val):
         return val
     return d() if isfunction(d) else d
+
 
 def get_timestep_embedding(timesteps, embedding_dim):
     """
@@ -74,6 +74,7 @@ class LinearAttention(nn.Module):
             out, "b heads c (h w) -> b (heads c) h w", heads=self.heads, h=h, w=w
         )
         return self.to_out(out)
+
 
 class MemoryEfficientCrossAttention(nn.Module):
     # https://github.com/MatthieuTPHR/diffusers/blob/d80b531ff8060ec1ea982b65a1b8df70f73aa67c/src/diffusers/models/attention.py#L223
@@ -135,13 +136,13 @@ class MemoryEfficientCrossAttention(nn.Module):
             )
 
         b, _, _ = q.shape
-        q, k, v = map(
-            lambda t: t.unsqueeze(3)
+        q, k, v = (
+            t.unsqueeze(3)
             .reshape(b, t.shape[1], self.heads, self.dim_head)
             .permute(0, 2, 1, 3)
             .reshape(b * self.heads, t.shape[1], self.dim_head)
-            .contiguous(),
-            (q, k, v),
+            .contiguous()
+            for t in (q, k, v)
         )
 
         # actually compute the attention, what we cannot get enough of
@@ -151,7 +152,7 @@ class MemoryEfficientCrossAttention(nn.Module):
             max_bs = 32768
             N = q.shape[0]
             n_batches = math.ceil(N / max_bs)
-            out = list()
+            out = []
             for i_batch in range(n_batches):
                 batch = slice(i_batch * max_bs, (i_batch + 1) * max_bs)
                 out.append(
@@ -181,6 +182,7 @@ class MemoryEfficientCrossAttention(nn.Module):
             # remove additional token
             out = out[:, n_tokens_to_mask:]
         return self.to_out(out)
+
 
 def nonlinearity(x):
     # swish
@@ -266,10 +268,10 @@ class CausalConv3d(torch.nn.Conv3d):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int | Tuple[int, int, int],
-        stride: int | Tuple[int, int, int] = 1,
-        padding: str | int | Tuple[int, int, int] = 0,
-        dilation: int | Tuple[int, int, int] = 1,
+        kernel_size: int | tuple[int, int, int],
+        stride: int | tuple[int, int, int] = 1,
+        padding: str | int | tuple[int, int, int] = 0,
+        dilation: int | tuple[int, int, int] = 1,
         groups: int = 1,
         bias: bool = True,
         padding_mode: str = "replicate",
@@ -448,8 +450,8 @@ class AttnBlock(nn.Module):
         v = self.v(h_)
 
         b, c, h, w = q.shape
-        q, k, v = map(
-            lambda x: rearrange(x, "b c h w -> b 1 (h w) c").contiguous(), (q, k, v)
+        q, k, v = (
+            rearrange(x, "b c h w -> b 1 (h w) c").contiguous() for x in (q, k, v)
         )
         h_ = torch.nn.functional.scaled_dot_product_attention(
             q, k, v
@@ -503,15 +505,15 @@ class MemoryEfficientAttnBlock(nn.Module):
 
         # compute attention
         B, C, H, W = q.shape
-        q, k, v = map(lambda x: rearrange(x, "b c h w -> b (h w) c"), (q, k, v))
+        q, k, v = (rearrange(x, "b c h w -> b (h w) c") for x in (q, k, v))
 
-        q, k, v = map(
-            lambda t: t.unsqueeze(3)
+        q, k, v = (
+            t.unsqueeze(3)
             .reshape(B, t.shape[1], 1, C)
             .permute(0, 2, 1, 3)
             .reshape(B * 1, t.shape[1], C)
-            .contiguous(),
-            (q, k, v),
+            .contiguous()
+            for t in (q, k, v)
         )
         out = xformers.ops.memory_efficient_attention(
             q, k, v, attn_bias=None, op=self.attention_op
@@ -592,15 +594,15 @@ class MemoryEfficientAttnVideoBlock(nn.Module):
 
         # compute attention
         B, C, H, W = q.shape
-        q, k, v = map(lambda x: rearrange(x, "b c h w -> b (h w) c"), (q, k, v))
+        q, k, v = (rearrange(x, "b c h w -> b (h w) c") for x in (q, k, v))
 
-        q, k, v = map(
-            lambda t: t.unsqueeze(3)
+        q, k, v = (
+            t.unsqueeze(3)
             .reshape(B, t.shape[1], 1, C)
             .permute(0, 2, 1, 3)
             .reshape(B * 1, t.shape[1], C)
-            .contiguous(),
-            (q, k, v),
+            .contiguous()
+            for t in (q, k, v)
         )
         out = xformers.ops.memory_efficient_attention(
             q, k, v, attn_bias=None, op=self.attention_op
@@ -663,7 +665,7 @@ def make_attn(in_channels, attn_type="vanilla", attn_kwargs=None):
             f"building MemoryEfficientAttnBlock with {in_channels} in_channels..."
         )
         return MemoryEfficientAttnBlock(in_channels)
-    elif type == "memory-efficient-cross-attn":
+    elif attn_type == "memory-efficient-cross-attn":
         attn_kwargs["query_dim"] = in_channels
         return MemoryEfficientCrossAttentionWrapper(**attn_kwargs)
     elif attn_type == "none":
@@ -860,7 +862,7 @@ class Decoder(nn.Module):
         self.gradient_checkpointing = gradient_checkpointing
 
         # compute in_ch_mult, block_in and curr_res at lowest res
-        in_ch_mult = (1,) + tuple(ch_mult)
+        (1,) + tuple(ch_mult)
         block_in = ch * ch_mult[self.num_resolutions - 1]
         curr_res = resolution // 2 ** (self.num_resolutions - 1)
         self.z_shape = (1, z_channels, curr_res, curr_res)

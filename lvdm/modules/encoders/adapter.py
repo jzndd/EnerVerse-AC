@@ -21,7 +21,12 @@ class Downsample(nn.Module):
         stride = 2 if dims != 3 else (1, 2, 2)
         if use_conv:
             self.op = conv_nd(
-                dims, self.channels, self.out_channels, 3, stride=stride, padding=padding
+                dims,
+                self.channels,
+                self.out_channels,
+                3,
+                stride=stride,
+                padding=padding,
             )
         else:
             assert self.channels == self.out_channels
@@ -36,7 +41,7 @@ class ResnetBlock(nn.Module):
     def __init__(self, in_c, out_c, down, ksize=3, sk=False, use_conv=True):
         super().__init__()
         ps = ksize // 2
-        if in_c != out_c or sk == False:
+        if in_c != out_c or not sk:
             self.in_conv = nn.Conv2d(in_c, out_c, ksize, 1, ps)
         else:
             # print('n_in')
@@ -44,18 +49,18 @@ class ResnetBlock(nn.Module):
         self.block1 = nn.Conv2d(out_c, out_c, 3, 1, 1)
         self.act = nn.ReLU()
         self.block2 = nn.Conv2d(out_c, out_c, ksize, 1, ps)
-        if sk == False:
+        if not sk:
             # self.skep = nn.Conv2d(in_c, out_c, ksize, 1, ps) # edit by zhouxiawang
             self.skep = nn.Conv2d(out_c, out_c, ksize, 1, ps)
         else:
             self.skep = None
 
         self.down = down
-        if self.down == True:
+        if self.down:
             self.down_opt = Downsample(in_c, use_conv=use_conv)
 
     def forward(self, x):
-        if self.down == True:
+        if self.down:
             x = self.down_opt(x)
         if self.in_conv is not None:  # edit
             x = self.in_conv(x)
@@ -70,7 +75,15 @@ class ResnetBlock(nn.Module):
 
 
 class Adapter(nn.Module):
-    def __init__(self, channels=[320, 640, 1280, 1280], nums_rb=3, cin=64, ksize=3, sk=False, use_conv=True):
+    def __init__(
+        self,
+        channels=[320, 640, 1280, 1280],
+        nums_rb=3,
+        cin=64,
+        ksize=3,
+        sk=False,
+        use_conv=True,
+    ):
         super(Adapter, self).__init__()
         # self.unshuffle = nn.PixelUnshuffle(8)
         self.channels = channels
@@ -80,10 +93,26 @@ class Adapter(nn.Module):
             for j in range(nums_rb):
                 if (i != 0) and (j == 0):
                     self.body.append(
-                        ResnetBlock(channels[i - 1], channels[i], down=True, ksize=ksize, sk=sk, use_conv=use_conv))
+                        ResnetBlock(
+                            channels[i - 1],
+                            channels[i],
+                            down=True,
+                            ksize=ksize,
+                            sk=sk,
+                            use_conv=use_conv,
+                        )
+                    )
                 else:
                     self.body.append(
-                        ResnetBlock(channels[i], channels[i], down=False, ksize=ksize, sk=sk, use_conv=use_conv))
+                        ResnetBlock(
+                            channels[i],
+                            channels[i],
+                            down=False,
+                            ksize=ksize,
+                            sk=sk,
+                            use_conv=use_conv,
+                        )
+                    )
         self.body = nn.ModuleList(self.body)
         self.conv_in = nn.Conv2d(cin, channels[0], 3, 1, 1)
 
