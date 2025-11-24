@@ -134,3 +134,7 @@ runtime_vis_results/*
 
 log
 log/*
+
+result_video_root/*
+
+result/*
