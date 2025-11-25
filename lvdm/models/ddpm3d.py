@@ -2130,10 +2130,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
                             # cv2.line(img,(int(base[0]), int(base[1])),(int(point[0]), int(point[1])), colors[i-1], 8)
 
                 img_list.append(img / 255.0)
-                os.makedirs("traj_debug", exist_ok=True)
-                cv2.imwrite(
-                    f"traj_debug/{i}_{lr_tag}_cam{iv}.png", img[:, :, ::-1] * 255
-                )
             img_list = np.stack(img_list, axis=0)
             all_img_list.append(img_list)
 
@@ -2262,8 +2258,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
                             #cv2.line(img,(int(base[0]), int(base[1])),(int(point[0]), int(point[1])), colors[i-1], 8)
 
                 img_list.append(img/255.)
-                os.makedirs('traj_debug', exist_ok=True)
-                cv2.imwrite(f'traj_debug/{i}_{lr_tag}_cam{iv}.png', img[:,:,::-1]*255)
             img_list = np.stack(img_list, axis=0)
             all_img_list.append(img_list)
 
