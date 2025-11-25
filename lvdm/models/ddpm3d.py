@@ -46,7 +46,7 @@ from lvdm.models.utils_diffusion import (
     make_beta_schedule,
     rescale_zero_terminal_snr,
 )
-from utils.general_utils import instantiate_from_config
+from evac_utils.general_utils import instantiate_from_config
 
 from lvdm.data.domain_table import DomainTable
 import av

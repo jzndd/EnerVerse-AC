@@ -13,7 +13,7 @@ from lvdm.modules.networks.ae_modules import (
     Encoder,
 )
 
-from utils.general_utils import instantiate_from_config
+from evac_utils.general_utils import instantiate_from_config
 
 
 class AutoencoderKL(pl.LightningModule):

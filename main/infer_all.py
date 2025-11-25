@@ -11,7 +11,7 @@ from pytorch_lightning import seed_everything
 import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from utils.general_utils import load_checkpoints, instantiate_from_config
+from evac_utils.general_utils import load_checkpoints, instantiate_from_config
 from lvdm.data.get_actions import get_actions, parse_h5
 from lvdm.data.statistics import StatisticInfo
 

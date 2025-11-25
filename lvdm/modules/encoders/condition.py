@@ -13,7 +13,7 @@ from transformers import (
 )
 
 from lvdm.common import autocast
-from utils.general_utils import count_params
+from evac_utils.general_utils import count_params
 from einops import rearrange
 
 

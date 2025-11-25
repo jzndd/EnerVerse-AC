@@ -12,7 +12,7 @@ import json
 import cv2
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from lvdm.data.get_actions import get_actions_from_ee_pose, get_action_bias_std
-from utils.general_utils import load_checkpoints, instantiate_from_config
+from evac_utils.general_utils import load_checkpoints, instantiate_from_config
 from lvdm.data.statistics import StatisticInfo
 from scipy.spatial.transform import Rotation as R
 

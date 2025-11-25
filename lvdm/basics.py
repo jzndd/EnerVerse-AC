@@ -9,7 +9,7 @@
 
 import torch.nn as nn
 
-from utils.general_utils import (
+from evac_utils.general_utils import (
     instantiate_from_config,
 )
 
