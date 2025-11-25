@@ -95,7 +95,6 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
                     for _i in range(0, n_batch):
                         sidx = _i * self.infer_block_batchsize
                         eidx = min(x.shape[0], (_i + 1) * self.infer_block_batchsize)
-                        # print(_i, n_batch, eidx, sidx)
                         xs.append(layer(x[sidx:eidx], context=context[sidx:eidx]))
                     xs = torch.cat(xs, dim=0)
                     x = rearrange(
@@ -298,12 +297,10 @@ class ResBlock(TimestepBlock):
         )
 
     def _forward(self, x, emb, batch_size=None, n_view=None):
-        # print(f'use_cache: {self.use_cache}')F
         if self.use_cache and self.denoise_step // self.denoise_oneloop_step > 0:
             x = rearrange(x, "(b v t) c h w -> (b v) c t h w", b=batch_size, v=n_view)
             x = x[:, :, -(2 * self.chunk) :]
             x = rearrange(x, "b c t h w -> (b t) c h w")
-        # print(f'updown: {self.updown}')F
         if self.updown:
             in_rest, in_conv = self.in_layers[:-1], self.in_layers[-1]
             h = in_rest(x)
@@ -312,14 +309,11 @@ class ResBlock(TimestepBlock):
             h = in_conv(h)
         else:
             h = self.in_layers(x)
-        # print(f'h shape: {h.shape}, emb shape: {emb.shape}')
         # h shape: torch.Size([20, 320, 40, 64]), emb shape: torch.Size([20, 1280])
         emb_out = self.emb_layers(emb).type(h.dtype)
-        # print(f'emb_out shape: {emb_out.shape}')
         # emb_out shape: torch.Size([20, 320])
         while len(emb_out.shape) < len(h.shape):
             emb_out = emb_out[..., None]
-        # print(f'use_scale_shift_norm: {self.use_scale_shift_norm}')F
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = torch.chunk(emb_out, 2, dim=1)
@@ -334,10 +328,8 @@ class ResBlock(TimestepBlock):
                 emb_out = rearrange(emb_out, "b c t h w -> (b t) c h w")
             h = h + emb_out
             h = self.out_layers(h)
-        # print(f'h shape after out_layers: {h.shape}, x shape: {x.shape}')
         # [20, 320, 40, 64]
         h = self.skip_connection(x) + h
-        # print(f'h shape after skip_connection: {h.shape}')
         # [20, 320, 40, 64]
         if self.use_cache:
             if self.denoise_step // self.denoise_oneloop_step > 0:
@@ -362,8 +354,6 @@ class ResBlock(TimestepBlock):
                     h[:, :, self.chunk : -self.chunk]
                 )
                 h = rearrange(h, "b c t h w -> (b t) c h w")
-        # print(f'use_temporal_conv: {self.use_temporal_conv}')T
-        # print(f'temoral_conv: {self.temopral_conv}')
         if self.use_temporal_conv and batch_size and n_view:
             h = rearrange(h, "(b v t) c h w -> (b v) c t h w", b=batch_size, v=n_view)
             h = self.temopral_conv(h)
@@ -371,7 +361,6 @@ class ResBlock(TimestepBlock):
 
         if self.use_cache:
             self.denoise_step += 1
-        # print(f'ResBlock output h shape: {h.shape}')
         # [20, 320, 40, 64]
         return h
 
@@ -831,7 +820,6 @@ class UNetModel(nn.Module):
             if use_checkpoint and self.use_checkpoint_until > 0:
                 self.use_checkpoint_until -= 1
                 use_checkpoint = self.use_checkpoint_until > 0
-                print(self.use_checkpoint_until)
 
             self.init_attn = TimestepEmbedSequential(
                 # self_attn * 2 + ffn
@@ -851,17 +839,12 @@ class UNetModel(nn.Module):
             )
 
         input_block_chans = [model_channels]
-        # print(f'input_block_chans: {input_block_chans}')#[320]
+
         ch = model_channels
         ds = 1
         idx = 0
-        # print(f'channel_mult: {channel_mult}')[1,2,4,4]
-        # print(f'num_res_blocks: {num_res_blocks}')[2]
-        # print(f'num_head_channels: {num_head_channels}')[64]
-        # print(f'temperal_attention: {self.temporal_attention}')[True]
         for level, mult in enumerate(channel_mult):
             for _ in range(num_res_blocks):  # 2
-                # print(f'level: {level}, mult: {mult}, ch: {ch}, ds: {ds}')
                 # 2 * level: 0, mult: 1, ch: 320, ds: 1
                 # 2 * level: 1, mult: 2, ch: 320, ds: 2
                 # level: 2, mult: 4, ch: 640, ds: 4
@@ -871,7 +854,6 @@ class UNetModel(nn.Module):
                 if use_checkpoint and self.use_checkpoint_until > 0:
                     self.use_checkpoint_until -= 1
                     use_checkpoint = self.use_checkpoint_until > 0
-                    print(self.use_checkpoint_until)
 
                 layers = [
                     ResBlock(
@@ -888,7 +870,6 @@ class UNetModel(nn.Module):
                     )
                 ]
                 ch = mult * model_channels
-                # print(f'  ResBlock: {ch} -> {mult * model_channels}')
                 # 2 * 320 -> 320
                 # 320 -> 640
                 # 640 -> 640
@@ -896,10 +877,6 @@ class UNetModel(nn.Module):
                 # 1280 -> 1280
                 # 2 * 1280 -> 1280
                 if ds in attention_resolutions:
-                    # print(f'  Attention at {ds}x downsampling')
-                    # 2 * 1
-                    # 2 * 2
-                    # 2 * 4
                     if num_head_channels == -1:
                         dim_head = ch // num_heads
                     else:
@@ -909,7 +886,6 @@ class UNetModel(nn.Module):
                     if use_checkpoint and self.use_checkpoint_until > 0:
                         self.use_checkpoint_until -= 1
                         use_checkpoint = self.use_checkpoint_until > 0
-                        print(self.use_checkpoint_until)
 
                     layers.append(
                         S2MVTransformer(
@@ -931,16 +907,11 @@ class UNetModel(nn.Module):
                             block_idx=idx,
                         )
                     )
-                    # print(f'  S2MVTransformer: {ch}, heads: {num_heads}, dim_head: {dim_head}')
-                    # 2 * S2MVTransformer: 320, heads: 5, dim_head: 64
-                    # 2 * S2MVTransformer: 640, heads: 10, dim_head: 64
-                    # 2 * S2MVTransformer: 1280, heads: 20, dim_head: 64
                     idx += 1
                     if self.temporal_attention:
                         if use_checkpoint and self.use_checkpoint_until > 0:
                             self.use_checkpoint_until -= 1
                             use_checkpoint = self.use_checkpoint_until > 0
-                            print(self.use_checkpoint_until)
 
                         layers.append(
                             TemporalTransformer(
@@ -959,10 +930,6 @@ class UNetModel(nn.Module):
                                 temporal_batch_size=temporal_batch_size,
                             )
                         )
-                        # print(f'  TemporalTransformer: {ch}, heads: {num_heads}, dim_head: {dim_head}')
-                        # 2 * TemporalTransformer: 320, heads: 5, dim_head: 64
-                        # 2 * TemporalTransformer: 640, heads: 10, dim_head: 64
-                        # 2 * TemporalTransformer: 1280, heads: 20, dim_head: 64
 
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
                 input_block_chans.append(ch)
@@ -972,7 +939,6 @@ class UNetModel(nn.Module):
                 if use_checkpoint and self.use_checkpoint_until > 0:
                     self.use_checkpoint_until -= 1
                     use_checkpoint = self.use_checkpoint_until > 0
-                    print(self.use_checkpoint_until)
 
                 self.input_blocks.append(
                     TimestepEmbedSequential(
@@ -993,14 +959,6 @@ class UNetModel(nn.Module):
                         )
                     )
                 )
-                # print(f'ResBlock'if resblock_updown else 'Downsample')
-                # Downsample
-                # DownSample
-                # DownSample
-                # print(f'level {level} downsampling: {ch} -> {out_ch}, ds: {ds} -> {ds*2}')
-                # level 0 downsampling: 320 -> 320, ds: 1 -> 2
-                # level 1 downsampling: 640 -> 640, ds: 2 -> 4
-                # level 2 downsampling: 1280 -> 1280, ds: 4 -> 8
                 ch = out_ch
                 input_block_chans.append(ch)
                 ds *= 2
@@ -1014,7 +972,6 @@ class UNetModel(nn.Module):
         if use_checkpoint and self.use_checkpoint_until > 0:
             self.use_checkpoint_until -= 1
             use_checkpoint = self.use_checkpoint_until > 0
-            print(self.use_checkpoint_until)
 
         layers = [
             ResBlock(
@@ -1033,7 +990,7 @@ class UNetModel(nn.Module):
         if use_checkpoint and self.use_checkpoint_until > 0:
             self.use_checkpoint_until -= 1
             use_checkpoint = self.use_checkpoint_until > 0
-            print(self.use_checkpoint_until)
+
         layers.append(
             S2MVTransformer(
                 ch,
@@ -1060,7 +1017,6 @@ class UNetModel(nn.Module):
             if use_checkpoint and self.use_checkpoint_until > 0:
                 self.use_checkpoint_until -= 1
                 use_checkpoint = self.use_checkpoint_until > 0
-                print(self.use_checkpoint_until)
 
             layers.append(
                 TemporalTransformer(
@@ -1083,7 +1039,6 @@ class UNetModel(nn.Module):
         if use_checkpoint and self.use_checkpoint_until > 0:
             self.use_checkpoint_until -= 1
             use_checkpoint = self.use_checkpoint_until > 0
-            print(self.use_checkpoint_until)
 
         layers.append(
             ResBlock(
@@ -1106,14 +1061,11 @@ class UNetModel(nn.Module):
         self.output_blocks = nn.ModuleList([])
         for level, mult in list(enumerate(channel_mult))[::-1]:
             for i in range(num_res_blocks + 1):
-                # print(f'output level: {level}, mult: {mult}, i: {i}, ch: {ch}, ds: {ds}')
                 ich = input_block_chans.pop()
 
                 if use_checkpoint and self.use_checkpoint_until > 0:
                     self.use_checkpoint_until -= 1
                     use_checkpoint = self.use_checkpoint_until > 0
-                    # print(self.use_checkpoint_until)
-
                 layers = [
                     ResBlock(
                         ch + ich,
@@ -1129,10 +1081,6 @@ class UNetModel(nn.Module):
                     )
                 ]
                 ch = model_channels * mult
-                # print(f'  ResBlock: {ch + ich} -> {mult * model_channels}')
-                # ResBlock: 2560 -> 1280
-                # ResBlock: 2560 -> 1280
-                # ResBlock: 2560 -> 1280
                 if ds in attention_resolutions:
                     if num_head_channels == -1:
                         dim_head = ch // num_heads
@@ -1143,7 +1091,6 @@ class UNetModel(nn.Module):
                     if use_checkpoint and self.use_checkpoint_until > 0:
                         self.use_checkpoint_until -= 1
                         use_checkpoint = self.use_checkpoint_until > 0
-                        # print(self.use_checkpoint_until)
 
                     layers.append(
                         S2MVTransformer(
@@ -1165,14 +1112,12 @@ class UNetModel(nn.Module):
                             block_idx=idx,
                         )
                     )
-                    # print(f'  S2MVTransformer: {ch}, heads: {num_heads}, dim_head: {dim_head}')
                     idx += 1
 
                     if self.temporal_attention:
                         if use_checkpoint and self.use_checkpoint_until > 0:
                             self.use_checkpoint_until -= 1
                             use_checkpoint = self.use_checkpoint_until > 0
-                            # print(self.use_checkpoint_until)
 
                         layers.append(
                             TemporalTransformer(
@@ -1191,14 +1136,12 @@ class UNetModel(nn.Module):
                                 temporal_batch_size=temporal_batch_size,
                             )
                         )
-                        # print(f'  TemporalTransformer: {ch}, heads: {num_heads}, dim_head: {dim_head}')
 
                 if level and i == num_res_blocks:
                     out_ch = ch
                     if use_checkpoint and self.use_checkpoint_until > 0:
                         self.use_checkpoint_until -= 1
                         use_checkpoint = self.use_checkpoint_until > 0
-                        # print(self.use_checkpoint_until)
 
                     layers.append(
                         ResBlock(
@@ -1216,7 +1159,6 @@ class UNetModel(nn.Module):
                         else Upsample(ch, conv_resample, dims=dims, out_channels=out_ch)
                     )
                     ds //= 2
-                # print(f'  ' + ('ResBlock'if resblock_updown else 'Upsample') )
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
         # input('x')
         self.out = nn.Sequential(
@@ -1264,7 +1206,6 @@ class UNetModel(nn.Module):
         t_emb = timestep_embedding(
             timesteps, self.model_channels, repeat_only=False
         ).type(x.dtype)
-        # print(f'dype: {x.dtype}, {t_emb.dtype}')
         emb = self.time_embed(t_emb)
 
         t0_emb = timestep_embedding(
@@ -1317,20 +1258,15 @@ class UNetModel(nn.Module):
         h = x.type(self.dtype)
         adapter_idx = 0
         hs = []
-        # print(f'h.shape: {h.shape}, emb.shape: {emb.shape}, context.shape: {context.shape}')
         # torch.Size([20, 19, 40, 64]), emb.shape: torch.Size([20, 1280]), context.shape: torch.Size([20, 272, 1024])
-        # print('forward input_blocks')
         for idx, module in enumerate(self.input_blocks):  # 12
             h = module(h, emb, context=context, batch_size=b, n_view=v)
-            # print(f'  input_block {idx}, h.shape: {h.shape}')
             if idx == 0 and self.addition_attention:
                 h = self.init_attn(h, emb, context=context, batch_size=b, n_view=v)
-                # print(f'    init_attn, h.shape: {h.shape}')
             # plug-in adapter features
             if ((idx + 1) % 3 == 0) and features_adapter is not None:
                 h = h + features_adapter[adapter_idx]
                 adapter_idx += 1
-                # print(f'    features_adapter {adapter_idx}, h.shape: {h.shape}')无
             hs.append(h)
         # input('x')
         if features_adapter is not None:

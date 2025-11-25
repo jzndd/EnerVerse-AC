@@ -26,7 +26,6 @@ def get_actions_from_ee_pose(gripper, all_ends_p=None, all_ends_o=None, slices=N
         # 0 * 3 + [0, 1, 2, ..., T-1]
     else:
         n = len(slices)
-    #print(f'slices:{slices}')
     all_rpy = []
     all_quat = []
 
@@ -61,7 +60,6 @@ def get_actions_from_ee_pose(gripper, all_ends_p=None, all_ends_o=None, slices=N
             all_delta_actions[i-delta_act_sidx, 0:6] = all_rpy[i, :6] - all_rpy[i-1, :6]
             all_delta_actions[i-delta_act_sidx, 3:6] = normalize_angles(all_delta_actions[i-delta_act_sidx, 3:6])
             all_delta_actions[i-delta_act_sidx, 6] = gripper[slices[i]] / 1.0
-    #print(f'end get_actions_maniskill')
     return all_abs_actions, all_delta_actions
 
 

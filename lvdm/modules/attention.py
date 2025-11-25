@@ -131,7 +131,6 @@ class CrossAttention(nn.Module):
             temporal_length = None
             # only used for spatial attention, while NOT for temporal attention
             if XFORMERS_IS_AVAILBLE and temporal_length is None:
-                # print('NOTE: Using XFORMERS')
                 self.forward = self.efficient_forward
 
         self.video_length = video_length
@@ -170,12 +169,8 @@ class CrossAttention(nn.Module):
 
         h = self.heads
         q = self.to_q(x)
-        # print(f"q shape: {q.shape}")
         context = default(context, x)
-        # print(f"context shape: {context.shape}")
-        # print(
-        #     f"image_cross_attention: {self.image_cross_attention}, traj_cross_attention: {self.traj_cross_attention}, spatial_self_attn: {spatial_self_attn}"
-        # )
+
         if (
             self.image_cross_attention
             and self.traj_cross_attention
@@ -280,7 +275,7 @@ class CrossAttention(nn.Module):
         q, k, v = (rearrange(t, "b n (h d) -> (b h) n d", h=h) for t in (q, k, v))
 
         sim = torch.einsum("b i d, b j d -> b i j", q, k) * self.scale
-        print(f"relative_position: {self.relative_position}")
+
         if self.relative_position:
             len_q, len_k, len_v = q.shape[1], k.shape[1], v.shape[1]
             k2 = self.relative_position_k(len_q, len_k)
@@ -305,9 +300,6 @@ class CrossAttention(nn.Module):
             out += out2
         out = rearrange(out, "(b h) n d -> b n (h d)", h=h)
 
-        print(
-            f"k_ip is not None: {k_ip is not None}, k_vpre is not None: {k_vpre is not None}"
-        )
         # for image cross-attention
         if k_ip is not None:
             k_ip, v_ip = (
@@ -319,9 +311,6 @@ class CrossAttention(nn.Module):
             out_ip = torch.einsum("b i j, b j d -> b i d", sim_ip, v_ip)
             out_ip = rearrange(out_ip, "(b h) n d -> b n (h d)", h=h)
 
-        print(
-            f"out_ip is not None: {out_ip is not None}, out_vpre is not None: {out_vpre is not None}"
-        )
         if out_ip is not None:
             if self.image_cross_attention_scale_learnable:
                 out = out + self.image_cross_attention_scale * out_ip * (
@@ -353,13 +342,11 @@ class CrossAttention(nn.Module):
         k_tp, v_tp, out_tp = None, None, None
         k_vpre, v_vpre, out_vpre = None, None, None
         # [2560, 20, 512]
-        # print(f'x shape: {x.shape}')
-        # print(f'context shape: {context.shape}' if context is not None else 'context is None')
+
         q = self.to_q(x)
-        # print(f'q shape: {q.shape}')
+
         context = default(context, x)
-        # print(f'context shape: {context.shape}')
-        # print(f'image_cross_attention: {self.image_cross_attention}, traj_cross_attention: {self.traj_cross_attention}, spatial_self_attn: {spatial_self_attn}')
+
         if (
             self.image_cross_attention
             and self.traj_cross_attention
@@ -478,7 +465,6 @@ class CrossAttention(nn.Module):
                 .reshape(b, out.shape[1], self.heads * self.dim_head)
             )
             # (b, n, heads * dim_head)
-            # print(f'k out shape: {out.shape}')
         # for image cross-attention
         if k_ip is not None:
             if k is not None:
@@ -1465,7 +1451,6 @@ class S2MVTransformer(nn.Module):
             context = rearrange(context, "b t l c -> (b t) l c")
 
         b, c, h, w = x.shape
-        # print(f'S2MV Input x shape: {x.shape}')
         x_in = x
         # 先标准化
         x = self.norm(x)
@@ -1473,19 +1458,14 @@ class S2MVTransformer(nn.Module):
             x = self.proj_in(x)
         x = rearrange(x, "b c h w -> b (h w) c").contiguous()
         # [20, 512, 320]
-        # print(f'use_linear: {self.use_linear}')T
         if self.use_linear:
             x = self.proj_in(x)
-            # 线性层
-        # print(f'x shape after proj_in: {x.shape}')
+
         # [20, 2560, 320]
         for i, block in enumerate(self.transformer_blocks):
-            # print('S2MV block:', i)
             x = block(x, context=context, **kwargs)
-            # print(f'x shape after block {i}: {x.shape}')
         if self.use_linear:
             x = self.proj_out(x)
-        # print(f'x shape after proj_out: {x.shape}')
         x = rearrange(x, "b (h w) c -> b c h w", h=h, w=w).contiguous()
         if not self.use_linear:
             x = self.proj_out(x)

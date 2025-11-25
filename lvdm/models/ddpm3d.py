@@ -582,16 +582,13 @@ class DDPM(pl.LightningModule):
 
     def shared_step(self, batch):
         x = self.get_input(batch, self.first_stage_key)
-        print("===========enter model forward==========")
         loss, loss_dict = self(x)
         return loss, loss_dict
 
     def training_step(self, batch, batch_idx):
-        # print(f'======enter training step==========')
         loss, loss_dict = self.shared_step(batch)
 
         if torch.isnan(loss).any() or torch.isinf(loss).any():
-            print("Found NaN or Inf in loss!")
             raise ValueError("NaN or Inf detected in loss!")
 
         self.log_dict(
@@ -1048,7 +1045,6 @@ class LatentDiffusion(DDPM):
 
         model_output = self.apply_model(x_noisy, t, cond, **kwargs)
         if torch.isnan(model_output).any() or torch.isinf(model_output).any():
-            print("Found NaN or Inf in model_output!")
             raise ValueError("NaN or Inf detected in model_output!")
         loss_dict = {}
         prefix = "train" if self.training else "val"
@@ -1089,7 +1085,6 @@ class LatentDiffusion(DDPM):
         return loss, loss_dict
 
     def training_step(self, batch, batch_idx):
-        # print(f'======enter training step==========')
         loss, loss_dict = self.shared_step(
             batch, random_uncond=self.classifier_free_guidance
         )
@@ -1539,13 +1534,11 @@ class ACWMLatentDiffusion(LatentDiffusion):
         pre_img_emb=None,
         **kwargs,
     ):
-        # print(f'======enter get_batch_input==========q')
         # x: b c v t h w
         x = super().get_input(batch, self.first_stage_key[0])
 
         if len(x.shape) < 6 and self.n_view == 1:
             x = x.unsqueeze(dim=2)
-        # print(f"### x shape: {x.shape} ###")
         # [8, 3, 1, 5, 320, 512]
         b, c, v, t, h, w = x.shape
         x = rearrange(x, "b c v t h w -> (b v) c t h w")
@@ -1558,7 +1551,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
             z = self.encode_first_stage(x)
 
         _, _, _, latent_h, latent_w = z.shape
-        # print(f"### latent shape: {z.shape} ###")
 
         # get trajectories
         traj = super().get_input(batch, self.first_stage_key[1])
@@ -1568,7 +1560,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
         traj_ori = rearrange(traj, "b c v t h w -> (b v) c t h w")
         traj = self.encode_first_stage(traj_ori)
-        # print(f"### traj shape: {traj.shape} ###")
 
         # prepare conditions
         cond_input = batch[self.cond_stage_key]
@@ -1621,9 +1612,7 @@ class ACWMLatentDiffusion(LatentDiffusion):
         )
 
         # get conditioning frame
-        # print(f'### t: {t}, chunk: {self.chunk} ###')
         # 5, 1
-        # print(f"### batch['cond_id']: {batch['cond_id']} ###")
         # [-5, -5, -5, -5, -5, -5, -5, -5]
         cond_frame_index = t + batch["cond_id"]
 
@@ -1631,14 +1620,12 @@ class ACWMLatentDiffusion(LatentDiffusion):
             img = []
             x = rearrange(x, "(b v) c t h w -> b c v t h w", b=b)
             for idx_b, cid in enumerate(cond_frame_index):
-                # print(f'### cid: {cid} ###')
                 # 0
                 if (
                     self.rand_cond_frame
                     and cid
                     < self.model.diffusion_model.temporal_length - self.chunk - 1
                 ):
-                    # print(f'### random cond frame ###')
                     cid_ = random.randint(
                         cid, self.model.diffusion_model.temporal_length - self.chunk - 1
                     )
@@ -1659,13 +1646,10 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
         else:
             img_emb = pre_img_emb
-        # print(f"### img_emb shape: {img_emb.shape} ###")#[1, 256, 1024]
         cond_input = prompt_mask * cond_input
-        # print(f'### cond_input: {cond_input.shape} ###')#[1, 16, 7]
         cond_emb = self.cond_stage_model(
             cond_input.to(dtype=x.dtype, device=self.device)
         )
-        # print(f"### cond_emb shape: {cond_emb.shape} ###")
         cat_mask = cat_mask.unsqueeze(1).repeat(1, v, 1, t, 1, 1)
         cat_mask = rearrange(cat_mask, "b v c t h w -> (b v) c t h w")
         cat_mask[:, :, : -self.chunk] = 1.0
@@ -1674,7 +1658,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
         cat_traj_mask = cat_traj_mask.unsqueeze(1).repeat(1, v, 1, t, 1, 1)
         cat_traj_mask = rearrange(cat_traj_mask, "b v c t h w -> (b v) c t h w")
         cat_traj_mask[:, :, : -self.chunk] = 0.0
-        # print(f"### cat_mask shape: {cat_mask.shape} ###")
         if self.model.conditioning_key == "hybrid":
             # simply repeat the cond_frame to match the seq_len of z
             img_cat_cond = z.clone()
@@ -1692,7 +1675,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
             if self.use_cat_mask:
                 cond["c_concat"].append(cat_mask)
             cond["c_concat"].append(traj)
-            # print('cond keys:', cond.keys())
 
         else:
             raise NotImplementedError
@@ -1745,7 +1727,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
                 cond["c_concat"].append(batch_raymap_o)
 
         out = [z, cond]
-        # print(f"### out ###")
         if return_first_stage_outputs:
             xrec = self.decode_first_stage(z)
             out.extend([xrec])
@@ -1788,7 +1769,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
         return x_aug
 
     def shared_step(self, batch, random_uncond, **kwargs):
-        # print(f'======enter shared step==========')
         # start_time = time.time()
         batch_inputs = self.get_batch_input(
             batch,
@@ -1798,7 +1778,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
             return_traj=True,
         )
         # end_time = time.time()
-        # print(f"get_batch_input 用时: {end_time - start_time:.4f} 秒")
         x, c, fs, did, traj = batch_inputs[:5]
         kwargs.update({"fs": fs.long()})
         kwargs.update({"domain_id": did.long()})
@@ -2072,19 +2051,14 @@ class ACWMLatentDiffusion(LatentDiffusion):
             0
         )  # [1, T, 4, 4]
         ee2cam = torch.matmul(w2c, gripper2world)
-        # print(f'ee2cam shape: {ee2cam.shape}')  # [V, T, 4, 4]
         uvs = compute_uvs(ee2cam, intrinsic)
         uvs[..., 0] = w - 1 - uvs[..., 0]
         uvs[..., 1] = h - 1 - uvs[..., 1]
         uvs_l = uvs_r = torch.tensor(uvs, dtype=torch.int64)
-        # print(f'uvs_l shape: {uvs_l.shape}')  # [V, T, 4, 2]
-        # print(uvs_l[:,0])
         # input('x')
         all_img_list = []
-        # print(f'w2c shape: {w2c.shape}')  # [V, 4, 4]
         for iv in range(w2c.shape[0]):
             img_list = []
-            # print(f'total {pose.shape[0]} frames')
             for i in range(pose.shape[0]):
                 # 循环每一帧
                 img = np.zeros((h, w, 3), dtype=np.uint8) + 50
@@ -2137,7 +2111,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
         all_img_list = rearrange(
             torch.tensor(all_img_list), "v t h w c -> c v t h w"
         ).float()
-        # print(f'all_img_list: {all_img_list.shape}')([3, 1, 275, 320, 512])
         # input("check input traj!")
         return all_img_list
 
@@ -2206,20 +2179,15 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
         gripper2world = get_transformation_matrix_from_quat(pose[:, 0:7]).unsqueeze(0) # [1, T, 4, 4]
         ee2cam = torch.matmul(w2c, gripper2world)
-        print(f'ee2cam shape: {ee2cam.shape}')  # [V, T, 4, 4]
         uvs = compute_uvs(ee2cam,intrinsic)
         uvs[..., 0] = w - 1 - uvs[..., 0]
         uvs[..., 1] = h - 1 - uvs[..., 1]
         uvs_l = uvs_r = torch.tensor(uvs, dtype=torch.int64)
-        print(f'uvs_l shape: {uvs_l.shape}')  # [V, T, 4, 2]
-        print(uvs_l[:,0])
         #input('x')
         all_img_list = []
-        print(f'w2c shape: {w2c.shape}')  # [V, 4, 4]
         for iv in range(w2c.shape[0]):
             
             img_list = []
-            print(f'total {pose.shape[0]} frames')
             for i in range(pose.shape[0]):
                   #循环每一帧
                 img = np.zeros((h, w, 3), dtype=np.uint8) + 50
@@ -2263,7 +2231,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
         all_img_list = np.stack(all_img_list, axis=0)
         all_img_list = rearrange(torch.tensor(all_img_list), "v t h w c -> c v t h w").float()
-        #print(f'all_img_list: {all_img_list.shape}')([3, 1, 275, 320, 512])
         #input("check input traj!")
         return all_img_list
     
@@ -2329,14 +2296,12 @@ class ACWMLatentDiffusion(LatentDiffusion):
         ### v, 3, 3
         if len(intrinsic_list.shape) == 2:
             intrinsic_list = intrinsic_list.unsqueeze(0)
-        print(f'h_ori: {h_ori}, w_ori: {w_ori}, sample_size: {sample_size}')
         h_scale = float(sample_size[0])/h_ori
         w_scale = float(sample_size[1])/w_ori
         intrinsic_list[:, 0, 0] *= w_scale
         intrinsic_list[:, 0, 2] *= w_scale
         intrinsic_list[:, 1, 1] *= h_scale
         intrinsic_list[:, 1, 2] *= h_scale
-        print(f'### intrinsic_list: {intrinsic_list} ###')
         action = action[:n_previous+num_chunk*chunk, :] 
         delta_action = delta_action[:num_chunk*chunk, :]
 
@@ -2347,11 +2312,9 @@ class ACWMLatentDiffusion(LatentDiffusion):
         traj_list = self.get_traj_for_rlinf(
             sample_size, action, w2c_list, c2w_list, intrinsic_list, 
         )
-        print(f"### traj_list shape: {traj_list.shape} ###")
         traj_list = rearrange(traj_list, "c v t h w -> (v t) c h w")
         traj_list = trans_norm(traj_list)
-        traj_list = rearrange(traj_list, "(v t) c h w -> c v t h w", v=self.n_view)
-        print(f'video_list: {video_list.shape}, traj_list: {traj_list.shape}, delta_action: {delta_action.shape}')        
+        traj_list = rearrange(traj_list, "(v t) c h w -> c v t h w", v=self.n_view) 
         ### b, c, v, t, h, w
         video_list = video_list.unsqueeze(dim=0)
         ### b, c, v, t, h, w
@@ -2381,7 +2344,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
         all_trajs = None
         all_c2ws_list = None
 
-        print("Start Prediction...")
         for i_chunk in tqdm(range(num_chunk)):
             # 总帧数/16 = num_chunk
 
@@ -2439,7 +2401,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
             video = torch.clamp(video, min=-1, max=1)
             traj = torch.clamp(traj, min=-1, max=1)
-            #print(f'dtype domain_id:{domain_id.dtype}, intrinsic_list:{intrinsic_list.dtype}, i_c2w_list:{i_c2w_list.dtype}, fps:{fps.dtype}')
             #dtype domain_id:torch.int64, intrinsic_list:torch.float32, i_c2w_list:torch.float32, fps:torch.float32
             batch = dict(
                 video = video.to(dtype=inference_dtype, device=self.device),
@@ -2450,10 +2411,7 @@ class ACWMLatentDiffusion(LatentDiffusion):
                 cond_id=torch.tensor([-n_previous-chunk]).to(dtype=torch.int64), device=self.device,
                 fps=fps,
             )
-            #print('获得batch数据')
-            #print(f'dtype of batch: video:{batch["video"].dtype}, traj:{batch["traj"].dtype}, delta_action:{batch["delta_action"].dtype}, domain_id:{batch["domain_id"].dtype}, intrinsic:{batch["intrinsic"].dtype}, extrinsic:{batch["extrinsic"].dtype}, cond_id:{batch["cond_id"].dtype}, fps:{batch["fps"].dtype}')
-            #video:torch.float16, traj:torch.float16, delta_action:torch.float16, domain_id:torch.int64, 
-            #intrinsic:torch.float32, extrinsic:torch.float32, cond_id:torch.int64, fps:torch.float32
+
             b, c, v, t, h, w = video.shape
 
             pre_z = None
@@ -2545,8 +2503,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
             idx_final_id += chunk
 
-        #print(f'x_samples shape: {x_samples.shape}')
-        #input('x')
         x_samples_video = rearrange(pred, 'b c v t h w -> t h (b v w) c') * 255
         x_samples_video = torch.round(x_samples_video).to(torch.uint8)
 
@@ -2573,8 +2529,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
         ### save images
         ### x_samples_video: {t, h, w, c}
-        print(f'x_samples_video shape: {x_samples_video.shape}')
-        print(f'n_valid: {n_valid}')
         #assert(x_samples_video.shape[0]>=n_valid)
         #n_valid = min(n_valid, x_samples_video.shape[0])
         n_valid = n_valid-4
@@ -2593,8 +2547,6 @@ class ACWMLatentDiffusion(LatentDiffusion):
 
         del pred, traj_all, samples
         torch.cuda.empty_cache()
-
-        print(f'Successfully generated')
 
         return x_samples_video, traj_samples_video
 

@@ -510,10 +510,6 @@ class FrozenCLIPT5Encoder(AbstractEncoder):
             clip_version, device, max_length=clip_max_length
         )
         self.t5_encoder = FrozenT5Embedder(t5_version, device, max_length=t5_max_length)
-        # print(
-        #     f"{self.clip_encoder.__class__.__name__} has {count_params(self.clip_encoder) * 1.0e-6:.2f} M parameters, "
-        #     f"{self.t5_encoder.__class__.__name__} comes with {count_params(self.t5_encoder) * 1.0e-6:.2f} M params."
-        # )
 
     def encode(self, text):
         return self(text)

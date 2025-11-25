@@ -75,7 +75,6 @@ class AttnBlock(nn.Module):
 
 def make_attn(in_channels, attn_type="vanilla"):
     assert attn_type in ["vanilla", "linear", "none"], f"attn_type {attn_type} unknown"
-    # print(f"making attention of type '{attn_type}' with {in_channels} in_channels")
     if attn_type == "vanilla":
         return AttnBlock(in_channels)
     elif attn_type == "none":
@@ -471,35 +470,28 @@ class Encoder(nn.Module):
         # timestep embedding
         temb = None
 
-        # print(f'encoder-input={x.shape}')
         # downsampling
         hs = [self.conv_in(x)]
-        # print(f'encoder-conv in feat={hs[0].shape}')
         for i_level in range(self.num_resolutions):
             for i_block in range(self.num_res_blocks):
                 h = self.down[i_level].block[i_block](hs[-1], temb)
-                # print(f'encoder-down feat={h.shape}')
                 if len(self.down[i_level].attn) > 0:
                     h = self.down[i_level].attn[i_block](h)
                 hs.append(h)
             if i_level != self.num_resolutions - 1:
-                # print(f'encoder-downsample (input)={hs[-1].shape}')
                 hs.append(self.down[i_level].downsample(hs[-1]))
-                # print(f'encoder-downsample (output)={hs[-1].shape}')
 
         # middle
         h = hs[-1]
         h = self.mid.block_1(h, temb)
-        # print(f'encoder-mid1 feat={h.shape}')
         h = self.mid.attn_1(h)
         h = self.mid.block_2(h, temb)
-        # print(f'encoder-mid2 feat={h.shape}')
 
         # end
         h = self.norm_out(h)
         h = nonlinearity(h)
         h = self.conv_out(h)
-        # print(f'end feat={h.shape}')
+
         return h
 
 
@@ -539,11 +531,6 @@ class Decoder(nn.Module):
         block_in = ch * ch_mult[self.num_resolutions - 1]
         curr_res = resolution // 2 ** (self.num_resolutions - 1)
         self.z_shape = (1, z_channels, curr_res, curr_res)
-        # print(
-        #     "AE working on z of shape {} = {} dimensions.".format(
-        #         self.z_shape, np.prod(self.z_shape)
-        #     )
-        # )
 
         # z to block_in
         self.conv_in = torch.nn.Conv2d(
@@ -602,41 +589,32 @@ class Decoder(nn.Module):
         # assert z.shape[1:] == self.z_shape[1:]
         self.last_z_shape = z.shape
 
-        # print(f'decoder-input={z.shape}')
         # timestep embedding
         temb = None
 
         # z to block_in
-        h = self.conv_in(z)
-        # print(f'decoder-conv in feat={h.shape}')
+        h = self.conv_in(z))
 
         # middle
         h = self.mid.block_1(h, temb)
         h = self.mid.attn_1(h)
         h = self.mid.block_2(h, temb)
-        # print(f'decoder-mid feat={h.shape}')
 
         # upsampling
-        # print(f'num_resolutions={self.num_resolutions}, num_res_blocks={self.num_res_blocks}')
         for i_level in reversed(range(self.num_resolutions)):
             for i_block in range(self.num_res_blocks + 1):
                 h = self.up[i_level].block[i_block](h, temb)
-                # print(f'i_level={i_level}, i_block={i_block}, feat={h.shape}')
                 if len(self.up[i_level].attn) > 0:
                     h = self.up[i_level].attn[i_block](h)
-                    # print(f'decoder-attn feat={h.shape}')
             if i_level != 0:
                 h = self.up[i_level].upsample(h)
-                # print(f'decoder-upsample feat={h.shape}')
-        # input('x')
-        # end
+
         if self.give_pre_end:
             return h
 
         h = self.norm_out(h)
         h = nonlinearity(h)
         h = self.conv_out(h)
-        # print(f'decoder-conv_out feat={h.shape}')
         if self.tanh_out:
             h = torch.tanh(h)
         return h
@@ -896,9 +874,6 @@ class Upsampler(nn.Module):
         assert out_size >= in_size
         num_blocks = int(np.log2(out_size // in_size)) + 1
         factor_up = 1.0 + (out_size % in_size)
-        # print(
-        #     f"Building {self.__class__.__name__} with in_size: {in_size} --> out_size {out_size} and factor {factor_up}"
-        # )
         self.rescaler = LatentRescaler(
             factor=factor_up,
             in_channels=in_channels,
@@ -928,9 +903,6 @@ class Resize(nn.Module):
         self.with_conv = learned
         self.mode = mode
         if self.with_conv:
-            print(
-                f"Note: {self.__class__.__name} uses learned downsampling and will ignore the fixed {mode} mode"
-            )
             raise NotImplementedError()
             # assert in_channels is not None
             # # no asymmetric padding in torch conv, must do it ourselves

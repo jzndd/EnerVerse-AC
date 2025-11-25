@@ -68,7 +68,6 @@ def load_config(args):
 
 def get_image(npy_path, n):
     arr = np.load(npy_path, allow_pickle=True)[:,0]
-    # print(arr.shape)
     img = arr[0]  # 只取第一帧的前3通道，shape: [3, h, w]
     img = torch.from_numpy(img).float().unsqueeze(1) / 255.0  # [3, 1, h, w]
     img = img.repeat(1, n, 1, 1)  # [3, n, h, w]
@@ -96,8 +95,6 @@ def get_caminfo(n):
     c2w = torch.eye(4, dtype=torch.float)
     c2w[:3, :3] = torch.from_numpy(rot).float()
     c2w[:3, 3] = torch.from_numpy(pos).float()
-    print(c2w)
-    # input('x')
     # c2w = torch.tensor([
     #     [-7.26818450e-08,  6.28266450e-01, -7.77998244e-01,  6.58613175e-01],
     #     [ 1.00000000e+00, -7.26818450e-08, -1.52115266e-07,  0.00000000e+00],
@@ -129,23 +126,20 @@ def main(args):
     img = get_image(
         args.video_path, n_previous
     ) # img.shape: [channel, n_previous, H, W]
-    #print(f'img shape: {img.shape}')img shape: torch.Size([3, 4, 480, 640])
+    #img shape: torch.Size([3, 4, 480, 640])
     ###
     action, delta_action = get_action_from_npy_for_eval(
         args.input_path, args.n_chunk, chunk, n_previous,
         sep=config.data.params.train.params.max_sep,
         domain_name="agibotworld"
     )
-    #print(f'the range of action of each dimension: {action.min(0).values} to {action.max(0).values}')
     #input('--- IGNORE ---')
     n = action.shape[0]
-    print(f'number of input actions: {n}') # 293
     #input('--- IGNORE ---')
     ###
 
     c2w, w2c, intrinsic = get_caminfo(n)
-    #print(f'c2w:{c2w[0]}, w2c:{w2c[0]}, intrinsic:{intrinsic}, base2cam:{base2cam[0]}')
-    #print(f'c2w shape: {c2w.shape}, w2c shape: {w2c.shape}, intrinsic shape: {intrinsic.shape}')#c2w shape: torch.Size([337, 4, 4]), w2c shape: torch.Size([337, 4, 4]), intrinsic shape: torch.Size([3, 3])
+    ##c2w shape: torch.Size([337, 4, 4]), w2c shape: torch.Size([337, 4, 4]), intrinsic shape: torch.Size([3, 3])
     ###
     model = load_model(config).to(device=device)
     model.eval()

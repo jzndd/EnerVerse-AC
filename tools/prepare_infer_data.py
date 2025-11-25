@@ -21,7 +21,6 @@ def extract_info(data_root, task_id, episode_id, slices, save_root, cam_name):
 
     with h5py.File(os.path.join(data_root, "proprio_stats", task_id, episode_id, "proprio_stats.h5"), "r") as fid:
         all_abs_gripper = np.array(fid[f"state/effector/position"], dtype=np.float32)
-        print(len(all_abs_gripper))
         all_abs_gripper = all_abs_gripper[slices]
         all_ends_p = np.array(fid["state/end/position"], dtype=np.float32)[slices]
         all_ends_o = np.array(fid["state/end/orientation"], dtype=np.float32)[slices]

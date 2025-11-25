@@ -145,19 +145,13 @@ class Resampler(nn.Module):
             )
 
     def forward(self, x):
-        # print(f'input x shape: {x.shape}')[1, 257, 1280]
+        # x shape: {x.shape}')[1, 257, 1280]
         latents = self.latents.repeat(x.size(0), 1, 1)  # B (T L) C
-        # print(f'after repeat, latents shape: {latents.shape}')#[1, 257, 1024]]
+        # latents shape: {latents.shape}')#[1, 257, 1024]]
         x = self.proj_in(x)
-        # print(f'after proj_in, x shape: {x.shape}')#下面全是[1, 256, 1024]
         for attn, ff in self.layers:
             latents = attn(x, latents) + latents
-            # print(f'after attn, latents shape: {latents.shape}')
             latents = ff(latents) + latents
-            # print(f'after ff, latents shape: {latents.shape}')
         latents = self.proj_out(latents)
-        # print(f'after proj_out, latents shape: {latents.shape}')
         latents = self.norm_out(latents)  # B L C or B (T L) C
-        # print(f'after norm_out, latents shape: {latents.shape}')
-        # input('check shape')
         return latents
