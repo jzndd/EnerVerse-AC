@@ -95,15 +95,27 @@ def compute_uvs(ee2cam, intrinsic):
         intrinsic_v = intrinsic[v]  # [3, 3]
         fx, fy = intrinsic_v[0, 0], intrinsic_v[1, 1]
         cx, cy = intrinsic_v[0, 2], intrinsic_v[1, 2]
+        # for t in range(T):
+        #     transform = ee2cam[v, t]  # [4, 4]
+        #     points_cam = (transform[:3, :3] @ local_axes.T).T + transform[
+        #         :3, 3
+        #     ]  # [4, 3]
+        #     x = points_cam[:, 0]
+        #     u = points_cam[:, 1] / x * fx + cx
+        #     v_ = points_cam[:, 2] / x * fy + cy
+        #     uvs[v, t] = np.vstack((u, v_)).T
         for t in range(T):
-            transform = ee2cam[v, t]  # [4, 4]
-            points_cam = (transform[:3, :3] @ local_axes.T).T + transform[
-                :3, 3
-            ]  # [4, 3]
-            x = points_cam[:, 0]
-            u = points_cam[:, 1] / x * fx + cx
-            v_ = points_cam[:, 2] / x * fy + cy
-            uvs[v, t] = np.vstack((u, v_)).T
+            T_cam = ee2cam[v, t]                            # [4, 4]
+            P_cam = (T_cam[:3, :3] @ local_axes.T).T + T_cam[:3, 3]  # [4, 3]
+
+            # 新坐标系：-Z 向前，Y 向上，X 向右
+            z = -P_cam[:, 2]                               # 深度 = -Z_camera
+            z = np.clip(z, a_min=1e-6, a_max=None)         # 防除零
+
+            u = P_cam[:, 0] / z * fx + cx                  # X_camera → 水平
+            v_pix = P_cam[:, 1] / z * fy + cy              # Y_camera → 垂直
+
+            uvs[v, t] = np.stack((u, v_pix), axis=-1)      # [4, 2]
 
     return uvs
 
