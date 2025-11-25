@@ -593,7 +593,7 @@ class Decoder(nn.Module):
         temb = None
 
         # z to block_in
-        h = self.conv_in(z))
+        h = self.conv_in(z)
 
         # middle
         h = self.mid.block_1(h, temb)
