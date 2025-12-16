@@ -160,6 +160,7 @@ def resnet_block(input_channels, num_channels, num_residuals, first_block=False)
 class RewModel(nn.Module):
     def __init__(
         self,
+        checkpoint_path=None,
     ) -> None:
         super().__init__()
         b1 = nn.Sequential(
@@ -184,6 +185,24 @@ class RewModel(nn.Module):
             nn.Sigmoid(),
         )
 
+        if checkpoint_path is not None:
+            self.load_checkpoint(checkpoint_path)
+        else:
+            raise ValueError("checkpoint_path is required")
+
+    def load_checkpoint(self, checkpoint_path):
+        """
+        Load model weights from checkpoint.
+        
+        Args:
+            checkpoint_path: Path to the checkpoint file (.pth)
+        """
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False,)
+        if 'model_state_dict' in checkpoint:
+            self.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self.load_state_dict(checkpoint)
+
     @torch.no_grad()
     def predict_rew(self, obs):
         assert obs.max() <= 1.5 and obs.min() >= -1.5, f"obs.max() is {obs.max()}, and obs min is {obs.min()}"
@@ -195,3 +214,118 @@ class RewModel(nn.Module):
 
     def forward(self, obs=None):
         return self.predict_rew(obs)
+
+try:
+    from transformers import (
+        VideoMAEConfig,
+        VideoMAEForVideoClassification,
+    )
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+
+class VideoMAERewardClassifier(nn.Module):
+    """
+    VideoMAE-based reward classifier for success/failure prediction.
+    Similar to RewModel but uses VideoMAE as the backbone for video classification.
+    """
+    
+    def __init__(
+        self,
+        model_name="MCG-NJU/videomae-base",
+        num_frames=4,
+        num_labels=2,
+        threshold=0.8158,
+        checkpoint_path=None,
+    ) -> None:
+        super().__init__()
+        
+        if not TRANSFORMERS_AVAILABLE:
+            raise ImportError(
+                "transformers library is required for VideoMAERewardClassifier. "
+                "Please install it with: pip install transformers"
+            )
+        
+        # Load VideoMAE configuration
+        cfg = VideoMAEConfig.from_pretrained(
+            model_name,
+            num_frames=num_frames,
+            num_labels=num_labels,
+        )
+        
+        # Initialize VideoMAE model
+        self.model = VideoMAEForVideoClassification.from_pretrained(
+            model_name,
+            config=cfg
+        )
+
+        if checkpoint_path is not None:
+            self.load_checkpoint(checkpoint_path)
+        else:
+            raise ValueError("checkpoint_path is required")
+
+        self.threshold = threshold
+    
+    def load_checkpoint(self, checkpoint_path):
+        """
+        Load model weights from checkpoint.
+        
+        Args:
+            checkpoint_path: Path to the checkpoint file (.pth)
+        """
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        if 'model_state_dict' in checkpoint:
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self.model.load_state_dict(checkpoint)
+    
+    def forward(self, pixel_values):
+        """
+        Forward pass through the VideoMAE model.
+        
+        Args:
+            pixel_values: (batch_size, num_frames, channels, height, width) - 
+                         Preprocessed video frames
+        Returns:
+            logits: (batch_size, num_labels) - Classification logits
+        """
+        outputs = self.model(pixel_values=pixel_values)
+        return outputs.logits
+    
+    @torch.no_grad()
+    def predict_rew(self, pixel_values, threshold=None):
+        """
+        Predict reward (success/failure) from video frames.
+        Similar to RewModel.predict_rew but for video input.
+        
+        Args:
+            pixel_values: (batch_size, num_frames, channels, height, width) - 
+                         Preprocessed video frames
+            threshold: Threshold for converting probabilities to binary predictions.
+                      If None, uses self.threshold set during initialization.
+        Returns:
+            predictions: (batch_size,) - Binary predictions (0 or 1)
+        """
+        # （b, 4, 3, 256, 256） —> (b, 4, 3, 224, 224)
+        # Reshape to (b*4, 3, 256, 256) for interpolation
+        b, n_frames, c, h, w = pixel_values.shape
+        pixel_values = pixel_values.view(b * n_frames, c, h, w)
+        # Interpolate to (b*4, 3, 224, 224)
+        pixel_values = F.interpolate(pixel_values, size=(224, 224), mode='bilinear', align_corners=False)
+        # Reshape back to (b, 4, 3, 224, 224)
+        pixel_values = pixel_values.view(b, n_frames, c, 224, 224)
+
+        logits = self.forward(pixel_values)
+        probs = torch.softmax(logits, dim=-1)[:, 1]  # Probability of success (class 1)
+        if threshold is None:
+            threshold = self.threshold
+        predictions = (probs >= threshold).int()
+        return predictions
+
+if __name__ == "__main__":
+    model = VideoMAERewardClassifier(model_name="/mnt/mnt/public/jzn/ckpt_path/reward_model/videomae/videomae-base-4frame",
+                            checkpoint_path="/mnt/mnt/public/jzn/ckpt_path/reward_model/videomae/videomae-base-4frame/best_ckpt/best_videomae_libero_4frames.pth",
+                            num_frames=4)
+    pixel_values = torch.randn(1, 4, 3, 256, 256)
+    predictions = model.predict_rew(pixel_values)
+    print(predictions)
